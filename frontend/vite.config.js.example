@@ -1,0 +1,56 @@
+// frontend/vite.config.js
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import tailwindcss from '@tailwindcss/vite';
+import path from 'path';
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+    },
+  },
+  plugins: [vue(), tailwindcss()],
+  server: {
+    port: 7331, // port
+    host: '0.0.0.0', // host
+    https: false,
+    allowedHosts: ['example.com'],
+    proxy: {
+      '/api': {
+        target: process.env.VITE_API_BASE_URL,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+      '/avatars': {
+        target: 'https://photori.eu',
+      },
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor': ['vue', 'vue-router', 'pinia'],
+          'admin': ['./src/views/Admin/Users.vue', './src/views/Admin/Logs.vue'],
+          'auth': ['./src/views/Auth/Login.vue', './src/views/Auth/Register.vue'],
+        }
+      }
+    },
+    chunkSizeWarningLimit: 600,
+    assetsInlineLimit: 4096,
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+      }
+    },
+    sourcemap: false,
+  },
+  optimizeDeps: {
+    include: ['vue', 'vue-router', 'pinia', 'axios']
+  },
+  cacheDir: '.vite_cache',
+});
+

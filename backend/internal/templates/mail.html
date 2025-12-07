@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Ensures proper mobile rendering and touch zooming -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Page title displayed in browser tabs and bookmarks -->
+    <title>Sveiki atvykę!</title> <!-- "Welcome!" in Lithuanian -->
+    <style>
+      /* Reset default browser styles for consistent rendering */
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        margin: 0;
+        padding: 0;
+      }
+      /* Main container with responsive width and elegant shadow */
+      .container {
+        max-width: 600px;
+        margin: 20px auto;
+        background: #ffffff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      /* Email header with prominent title */
+      .header {
+        text-align: center;
+        font-size: 24px;
+        font-weight: bold;
+        color: #333;
+      }
+      /* Main content with readable typography */
+      .content {
+        font-size: 16px;
+        color: #555;
+        line-height: 1.6;
+        text-align: center;
+      }
+      /* Verification code styling for high visibility */
+      .code {
+        font-size: 22px;
+        font-weight: bold;
+        color: #d9534f;
+        background: #f8d7da;
+        padding: 10px;
+        display: inline-block;
+        border-radius: 5px;
+        margin: 10px 0;
+      }
+      /* Footer for copyright and additional information */
+      .footer {
+        text-align: center;
+        font-size: 14px;
+        color: #777;
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">Sveiki atvykę į 'Yopta.top'!</div> <!-- Welcome to our website! -->
+      <div class="content">
+        <p>Labas, {{.Name}}. Tipo zdarova. Nežinau ką pamiršai mano svetainėje, bet jei nori prisijungi turi aktivuoti savo paštą.</p> <!-- Greetings to you, {{.Name}}, and thank you for registering! -->
+        <p>
+          Norėdamas užbaigti procesą, aktyvuok savo paskyrą naudodamas
+          žemiau pateiktą kodą:
+        </p> <!-- To complete the process, please activate your account using the code below: -->
+        <div class="code">{{.Code}}</div>
+        <p>Jei ne, tiesiog ignoruok šį laišką.</p> <!-- If you did not register, simply ignore this email. -->
+      </div>
+      <div class="footer">&copy; 2025 Yopta.top. Visos teisės saugomos.</div> <!-- © 2025 Our website. All rights reserved. -->
+    </div>
+  </body>
+</html>
