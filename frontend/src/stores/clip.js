@@ -185,58 +185,128 @@ export const useClipStore = defineStore('clip', {
       });
     },
 
-    importFromText(text) {
-      if (!text || typeof text !== 'string') return 0;
+// Modified importFromText method for clip.js store
+// This version preserves track assignments (targetTrack, startingTrack) 
+// across clipboard imports by saving them to localStorage
 
-      const loggingStore = useLoggingStore();
-      const slogStore = useSlogStore();
+importFromText(text) {
+  if (!text || typeof text !== 'string') return 0;
 
-      try {
-        // Parse the text data
-        const data = parseTabData(text);
-        const rows = data.records;
-        this.depotList = data.depotList;
-        this.dateList = data.dateList;
+  const loggingStore = useLoggingStore();
+  const slogStore = useSlogStore();
 
-        if (rows.length === 0) {
-          slogStore.addToast({
-            message: 'Nepavyko importuoti: netinkamas duomenų formatas',
-            type: 'alert-warning'
-          });
-          return 0;
-        }
-
-        // Update the records array with new records
-        this.addRecords(rows);
-
-        // Update last import timestamp
-        this.lastImported = new Date().toISOString();
-
-        // Log successful import
-        loggingStore.info('Duomenys sėkmingai importuoti iš iškarpinės', {
-          component: 'Klasika',
-          action: 'clipboard_import',
-          recordCount: rows.length
-        });
-
-        return rows.length;
-      } catch (error) {
-        console.error('Import error:', error);
-        loggingStore.error('Klaida importuojant duomenis', {
-          component: 'Klasika',
-          action: 'clipboard_import_error',
-          error: error.message
-        });
-
-        slogStore.addToast({
-          message: `Importavimo klaida: ${error.message}`,
-          type: 'alert-error'
-        });
-
-        return 0;
+  try {
+    // STEP 1: Save track assignments to localStorage before clearing
+    const trackAssignments = {};
+    this.records.forEach(record => {
+      if (record.targetTrack) {
+        trackAssignments[record.id] = {
+          targetTrack: record.targetTrack || null,
+        };
       }
-    },
+    });
+    
+    // Save to localStorage
+    if (Object.keys(trackAssignments).length > 0) {
+      try {
+        localStorage.setItem('yopta_track_assignments', JSON.stringify(trackAssignments));
+        loggingStore.info('Kelio priskyrimai išsaugoti', {
+          component: 'clipStore',
+          action: 'save_track_assignments',
+          count: Object.keys(trackAssignments).length
+        });
+      } catch (e) {
+        console.error('Klaida išsaugant kelio priskyrimus:', e);
+        loggingStore.error('Nepavyko išsaugoti kelio priskyrimų', {
+          component: 'clipStore',
+          error: e.message
+        });
+      }
+    }
 
+    // STEP 2: Clear records completely
+    this.records = [];
+    
+    loggingStore.info('Įrašai išvalyti prieš importą', {
+      component: 'clipStore',
+      action: 'clear_records'
+    });
+
+    // STEP 3: Parse and import new data
+    const data = parseTabData(text);
+    const rows = data.records;
+    this.depotList = data.depotList;
+    this.dateList = data.dateList;
+
+    if (rows.length === 0) {
+      slogStore.addToast({
+        message: 'Nepavyko importuoti: netinkamas duomenų formatas',
+        type: 'alert-warning'
+      });
+      return 0;
+    }
+
+    // Add new records
+    this.addRecords(rows);
+
+    // STEP 4: Restore track assignments from localStorage
+    if (Object.keys(trackAssignments).length > 0) {
+      let restoredArrivals = 0;
+      let restoredDepartures = 0;
+      
+      this.records.forEach(record => {
+        if (trackAssignments[record.id]) {
+          // Restore targetTrack for arrivals
+          if (trackAssignments[record.id].targetTrack) {
+            record.targetTrack = trackAssignments[record.id].targetTrack;
+            restoredArrivals++;
+          }
+        }
+      });
+      
+      if (restoredArrivals > 0 || restoredDepartures > 0) {
+        loggingStore.info('Kelio priskyrimai atkurti', {
+          component: 'clipStore',
+          action: 'restore_track_assignments',
+          arrivals: restoredArrivals,
+          departures: restoredDepartures,
+          total: restoredArrivals + restoredDepartures
+        });
+        
+        slogStore.addToast({
+          message: `Atkurti ${restoredArrivals + restoredDepartures} kelio priskyrimai`,
+          type: 'alert-info'
+        });
+      }
+    }
+
+    // Update last import timestamp
+    this.lastImported = new Date().toISOString();
+
+    // Log successful import
+    loggingStore.info('Duomenys sėkmingai importuoti iš iškarpinės', {
+      component: 'clipStore',
+      action: 'clipboard_import',
+      recordCount: rows.length
+    });
+
+    return rows.length;
+  } catch (error) {
+    console.error('Import error:', error);
+    loggingStore.error('Klaida importuojant duomenis', {
+      component: 'clipStore',
+      action: 'clipboard_import_error',
+      error: error.message
+    });
+
+    slogStore.addToast({
+      message: `Importavimo klaida: ${error.message}`,
+      type: 'alert-error'
+    });
+
+    return 0;
+  }
+},
     addRecords(newRecords) {
       if (!Array.isArray(newRecords) || newRecords.length === 0) return;
 

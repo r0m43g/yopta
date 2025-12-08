@@ -734,6 +734,8 @@ onMounted(async () => {
   text-align: center;
   vertical-align: middle;
   font-weight: bold;
+  font-size: smaller;
+  font-style: italic;
 }
 
 .copible {
