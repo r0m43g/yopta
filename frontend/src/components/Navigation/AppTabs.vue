@@ -39,6 +39,11 @@
               {{ links['stations'].name }}
             </router-link>
           </li>
+          <li v-if="isAdmin">
+            <router-link class="justify-center" :to="links['fieldMappings'].route">
+              {{ links['fieldMappings'].name }}
+            </router-link>
+          </li>
           <li>
             <router-link class="justify-center" :to="links['profile'].route">
               {{ links['profile'].name }}
@@ -148,6 +153,11 @@ const links = {
   stations: {
     name: 'Stotys/Depai',
     route: '/stations',
+    auth: true,
+  },
+  fieldMappings: {
+    name: 'Laukų atvaizdavimai',
+    route: '/field-mappings',
     auth: true,
   },
   systemSettings: {

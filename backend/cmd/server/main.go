@@ -192,6 +192,8 @@ func main() {
 		r.Get("/api/v1/stations", handlers.GetAllStations(db))
 		r.Get("/api/v1/stations/{id}", handlers.GetStationByID(db))
 
+		r.Get("/api/v1/field-mappings/map", handlers.GetFieldMappingsMap(db))
+
 		// Admin-only routes group with additional role-based middleware
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.RoleMiddleware("admin"))
@@ -227,6 +229,15 @@ func main() {
 			r.Post("/api/v1/stations/{stationId}/tracks", handlers.AddTrack(db))
 			r.Put("/api/v1/tracks/{trackId}", handlers.UpdateTrack(db))
 			r.Delete("/api/v1/tracks/{trackId}", handlers.DeleteTrack(db))
+
+			// Field mappings management endpoints
+			r.Get("/api/v1/field-mappings", handlers.GetFieldMappings(db))
+			r.Get("/api/v1/field-mappings/map", handlers.GetFieldMappingsMap(db))
+			r.Get("/api/v1/field-mappings/{id}", handlers.GetFieldMapping(db))
+			r.Post("/api/v1/field-mappings", handlers.CreateFieldMapping(db))
+			r.Put("/api/v1/field-mappings/{id}", handlers.UpdateFieldMapping(db))
+			r.Delete("/api/v1/field-mappings/{id}", handlers.DeleteFieldMapping(db))
+			r.Post("/api/v1/field-mappings/reorder", handlers.ReorderFieldMappings(db))
 		})
 	})
 

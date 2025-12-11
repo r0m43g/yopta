@@ -92,6 +92,15 @@ const routes = [
     }
   },
   {
+    path: '/field-mappings',
+    name: 'fieldMappings',
+    component: () => import('../views/Admin/FieldMappings.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+    }
+  },
+  {
     path: '/:catchAll(.*)',
     component: () => import('../views/NotFound.vue'),
     name: 'notFound'

@@ -482,8 +482,8 @@ function applyFilters() {
 async function handleClipboardImport() {
   try {
     // For testing purposes we use dummy data
-    // const text = clip;
-    const text = await navigator.clipboard.readText();
+    const text = clip;
+    //const text = await navigator.clipboard.readText();
 
     const count = clipStore.importFromText(text);
 
@@ -606,6 +606,21 @@ onMounted(async () => {
   isLoading.value = true;
 
   try {
+    if (!clipStore.fieldMappingsLoaded) {
+      const mappingsLoaded = await clipStore.loadFieldMappings();
+      if (!mappingsLoaded) {
+        slogStore.addToast({
+          message: 'Nepavyko įkelti laukų konfigūracijos',
+          type: 'alert-error'
+        });
+        
+        loggingStore.error('Klaida įkeliant laukų konfigūraciją', {
+          component: 'Klasika',
+          action: 'load_field_mappings_failed'
+        });
+      }
+    }
+
     if (!clipStore.stationsAvailable) {
       await loadStations();
     }

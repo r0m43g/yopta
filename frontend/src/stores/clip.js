@@ -1,5 +1,6 @@
 // src/stores/clip.js
 import { defineStore } from 'pinia'
+import api from '../services/api'
 import { useLoggingStore } from './logging'
 import { useSlogStore } from './slog'
 import heads from '../models/headers';
@@ -22,9 +23,15 @@ export const useClipStore = defineStore('clip', {
     dateList: [],             // List of available dates
     lastImported: null,       // Timestamp of last import
     stations: [],             // List of stations with tracks map
+    fieldMappings: null,        // Will store the headers map from API
+    fieldMappingsLoaded: false, // Track if mappings are loaded
   }),
 
   getters: {
+    hasFieldMappings(state) {
+      return state.fieldMappings !== null && Object.keys(state.fieldMappings).length > 0;
+    },
+
     availableDepots(state) {
       // If we already have a list, use it
       return state.depotList.sort();
@@ -170,6 +177,54 @@ export const useClipStore = defineStore('clip', {
 
   },
   actions: {
+    /**
+    * Load field mappings from API
+    * This replaces the static headers.js import
+    */
+    async loadFieldMappings() {
+      const loggingStore = useLoggingStore();
+      
+      try {
+        const response = await api.get('/field-mappings/map');
+        this.fieldMappings = response.data;
+        this.fieldMappingsLoaded = true;
+        
+        loggingStore.info('Laukų atvaizdavimai įkelti', {
+          component: 'clipStore',
+          action: 'load_field_mappings',
+          count: Object.keys(this.fieldMappings).length
+        });
+        
+        return true;
+      } catch (error) {
+        loggingStore.error('Nepavyko įkelti laukų atvaizdavimų', {
+          component: 'clipStore',
+          action: 'load_field_mappings_failed',
+          error: error.message
+        });
+        
+        // Fallback: try to use local headers.js if API fails
+        try {
+          const heads = (await import('../models/headers')).default;
+          this.fieldMappings = heads;
+          this.fieldMappingsLoaded = true;
+          
+          loggingStore.warn('Naudojami lokalūs laukų atvaizdavimai', {
+            component: 'clipStore',
+            action: 'fallback_to_local_headers'
+          });
+          
+          return true;
+        } catch (fallbackError) {
+          loggingStore.error('Nepavyko įkelti net lokalių atvaizdavimų', {
+            component: 'clipStore',
+            error: fallbackError.message
+          });
+          return false;
+        }
+      }
+    },
+
     setFilters({ depot, date, timeRange }) {
       if (depot) this.selectedDepot = depot;
       if (date) this.selectedDate = date;
@@ -194,6 +249,21 @@ importFromText(text) {
 
   const loggingStore = useLoggingStore();
   const slogStore = useSlogStore();
+
+  // NEW: Check if field mappings are loaded
+  if (!this.fieldMappingsLoaded || !this.fieldMappings) {
+    slogStore.addToast({
+      message: 'Laukų atvaizdavimai dar neįkelti. Bandykite vėl.',
+      type: 'alert-warning'
+    });
+    
+    loggingStore.error('Bandoma importuoti be laukų atvaizdavimų', {
+      component: 'clipStore',
+      action: 'import_without_mappings'
+    });
+    
+    return 0;
+  }
 
   try {
     // STEP 1: Save track assignments to localStorage before clearing
@@ -233,7 +303,7 @@ importFromText(text) {
     });
 
     // STEP 3: Parse and import new data
-    const data = parseTabData(text);
+    const data = parseTabData(text, this.fieldMappings);
     const rows = data.records;
     this.depotList = data.depotList;
     this.dateList = data.dateList;
@@ -403,7 +473,7 @@ importFromText(text) {
   }
 });
 
-function parseTabData(text, depotSource, dateSource) {
+function parseTabData(text, fieldMappings) {
   const lines = text.split('\n');
   if (lines && lines.length < 2) return [];
 
@@ -411,16 +481,17 @@ function parseTabData(text, depotSource, dateSource) {
   const headers = lines[0].trim('\r').split('\t');
 
   // Check if all required fields are present
-  const hasAllHeaders = Object.keys(heads).every(field => headers.includes(field));
+  const hasAllHeaders = Object.keys(fieldMappings).every(field => headers.includes(field));
   if (!hasAllHeaders) {
-    console.error('Missing required headers.');
+    console.error('Missing required headers. Expected:', Object.keys(fieldMappings));
+    console.error('Got: ', headers);
     return [];
   }
 
   // Process data rows
   const records = [];
-  const depots = new Set(depotSource || []);
-  const dates = new Set(dateSource || []);
+  const depots = new Set();
+  const dates = new Set();
 
 
   for (let i = 1; i < lines.length; i++) {
@@ -436,7 +507,7 @@ function parseTabData(text, depotSource, dateSource) {
     for (let j = 0; j < headers.length; j++) {
       const header = headers[j].trim();
       const value = values[j].trim();
-      if (heads[header]) record[heads[header]] = value;
+      if (fieldMappings[header]) record[fieldMappings[header]] = value;
     }
 
     try {
