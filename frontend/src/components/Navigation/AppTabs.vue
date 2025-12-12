@@ -44,6 +44,11 @@
               {{ links['fieldMappings'].name }}
             </router-link>
           </li>
+          <li v-if="isAdmin">
+            <router-link class="justify-center" :to="links['antrasFieldMappings'].route">
+              {{ links['antrasFieldMappings'].name }}
+            </router-link>
+          </li>
           <li>
             <router-link class="justify-center" :to="links['profile'].route">
               {{ links['profile'].name }}
@@ -158,6 +163,12 @@ const links = {
   fieldMappings: {
     name: 'Laukų atvaizdavimai',
     route: '/field-mappings',
+    auth: true,
+  },
+
+  antrasFieldMappings: {
+    name: 'Excel laukų atvaizdavimai',
+    route: '/antras-field-mappings',
     auth: true,
   },
   systemSettings: {

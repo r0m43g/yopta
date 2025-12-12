@@ -101,6 +101,15 @@ const routes = [
     }
   },
   {
+    path: '/antras-field-mappings',
+    name: 'antrasFieldMappings',
+    component: () => import('../views/Admin/AntrasFieldMappings.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+    }
+  },
+  {
     path: '/:catchAll(.*)',
     component: () => import('../views/NotFound.vue'),
     name: 'notFound'
