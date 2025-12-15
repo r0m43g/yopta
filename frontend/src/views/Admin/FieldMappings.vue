@@ -1,5 +1,5 @@
 <template lang="pug">
-.field-mappings-page.p-6
+.field-mappings-page.p-6.h-screen.w-screen.overflow-auto.scrollbar-thin
   .flex.justify-between.items-center.mb-6
     h1.text-3xl.font-bold Laukų atvaizdavimai
     button.btn.btn-primary(@click="showAddModal = true")

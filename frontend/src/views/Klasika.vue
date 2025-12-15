@@ -482,8 +482,8 @@ function applyFilters() {
 async function handleClipboardImport() {
   try {
     // For testing purposes we use dummy data
-    const text = clip;
-    //const text = await navigator.clipboard.readText();
+    //const text = clip;
+    const text = await navigator.clipboard.readText();
 
     const count = clipStore.importFromText(text);
 

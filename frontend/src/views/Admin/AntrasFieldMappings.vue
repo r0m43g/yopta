@@ -1,5 +1,5 @@
 <template lang="pug">
-.antras-field-mappings-page.p-6
+.antras-field-mappings-page.p-6.h-screen.w-screen.overflow-auto.scrollbar-thin
   .flex.justify-between.items-center.mb-6
     h1.text-3xl.font-bold Antras laukų atvaizdavimai
     button.btn.btn-primary(@click="showAddModal = true")
