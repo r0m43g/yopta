@@ -384,6 +384,8 @@ export const useAntrasStore = defineStore('antras', {
      */
     generateDedupeKey(row) {
       return [
+        row.validityIn || '',
+        row.validityOut || '',
         row.trainNoIn || '',
         row.trainNoOut || '',
         row.arrival || '',

@@ -41,7 +41,6 @@
           path(stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16")
         | Išvalyti
 
-  //- Loading field mappings indicator
   .alert.alert-warning.mb-6(v-if="!fieldMappingsLoaded && !isLoading")
     svg.stroke-current.shrink-0.h-6.w-6(xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24")
       path(stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z")
@@ -49,7 +48,6 @@
       div.font-bold Laukų atvaizdavimai neįkelti
       div.text-sm Bandoma įkelti laukų atvaizdavimus iš serverio...
 
-  //- Info alert when no data
   .alert.alert-info.mb-6(v-if="!hasData && fieldMappingsLoaded && !isLoading")
     svg.stroke-current.shrink-0.h-6.w-6(xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24")
       path(stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z")
@@ -57,13 +55,11 @@
       div.font-bold Pradėkite nuo duomenų importavimo
       div.text-sm Pasirinkite Excel failą su traukinių judėjimo duomenimis
 
-  //- Loading state
   .flex.justify-center.items-center.py-12(v-if="isLoading")
     div.text-center
       span.loading.loading-spinner.loading-lg.mb-4
       p.text-lg Importuojama...
 
-  //- Statistics cards
   .grid.grid-cols-6.gap-4.mb-6(v-if="hasData && !isLoading")
     .stat.bg-base-100.rounded-lg.shadow.p-3
       .stat-title.text-xs Stotys
@@ -84,7 +80,6 @@
       .stat-title.text-xs Išvykimai
       .stat-value.text-2xl {{ stats.departures }}
 
-  //- Data display section with tabs
   .bg-base-100.rounded-lg.shadow-lg(v-if="hasData && !isLoading")
     //- Tab navigation
     .tabs.tabs-boxed.p-2.bg-base-200.rounded-t-lg
@@ -113,7 +108,6 @@
               option(value="") Visos datos
               option(v-for="date in availableDates" :key="date" :value="date") {{ date }}
 
-        //- Selected station data
         .space-y-4(v-if="selectedStation")
           //- Station header
           .flex.justify-between.items-center.mb-4
@@ -123,7 +117,6 @@
             .badge.badge-lg.badge-outline(v-if="tracksLoaded")
               | {{ tracks.length }} keliai
 
-          //- Arrivals and Departures cards
           .grid.grid-cols-2.gap-4
             //- Arrivals card
             .card.bg-base-200.shadow
@@ -152,7 +145,6 @@
                         td ...
                   .text-center.py-4.text-base-content.opacity-50(v-else) Nėra atvykimų
 
-            //- Departures card
             .card.bg-base-200.shadow
               .card-body.p-4(ref="departuresCard")
                 h4.card-title.text-error.cursor-pointer(@click="copyCardToClipboard(false)")
@@ -179,12 +171,10 @@
                         td ...
                   .text-center.py-4.text-base-content.opacity-50(v-else) Nėra išvykimų
 
-        //- No station selected prompt
         .text-center.py-12(v-else)
           .text-6xl.mb-4 🚉
           p.text-lg.text-base-content.opacity-70 Pasirinkite stotį arba depą
 
-      //- Vehicles tab with search
       div(v-show="activeTab === 'vehicles'")
         .form-control.mb-4.w-full.max-w-xs
           label.label
@@ -212,7 +202,6 @@
                     span.badge.badge-sm.badge-outline(v-for="w in vehicle.vehicleWorkings" :key="w") {{ w }}
           .text-center.py-4.text-base-content.opacity-50(v-if="filteredVehicles.length === 0") Nerasta riedmenų
 
-      //- Staff tab with search
       div(v-show="activeTab === 'staff'")
         .form-control.mb-4.w-full.max-w-md
           label.label
@@ -243,7 +232,6 @@
                     span.badge.badge-sm.badge-ghost(v-for="d in person.duties" :key="d") {{ d }}
           .text-center.py-4.text-base-content.opacity-50(v-if="filteredStaff.length === 0") Nerasta personalo
 
-      //- Duties tab with search
       div(v-show="activeTab === 'duties'")
         .form-control.mb-4.w-full.max-w-xs
           label.label
@@ -271,7 +259,6 @@
                     span.badge.badge-sm.badge-primary(v-for="t in duty.trains" :key="t") {{ t }}
           .text-center.py-4.text-base-content.opacity-50(v-if="filteredDuties.length === 0") Nerasta pamainų
 
-      //- Raw records tab
       div(v-show="activeTab === 'raw'")
         //- Pagination info
         .flex.justify-between.items-center.mb-4
@@ -302,7 +289,6 @@
                 td.text-xs {{ record.startingLocationIn || '-' }}
                 td.text-xs {{ record.endLocationIn || '-' }}
 
-  //- Timeline drawer (only when tracks are loaded)
   .timeline-drawer-wrapper(
     v-if="tracksLoaded && tracks.length > 0 && selectedSheet"
     :class="{ 'timeline-open': isDrawerOpen }"
@@ -326,7 +312,6 @@
           @track-assigned="handleTrackAssigned"
         )
 
-  //- Clear confirmation modal
   dialog.modal(:class="{ 'modal-open': showClearModal }")
     .modal-box
       h3.font-bold.text-lg Išvalyti duomenis?
