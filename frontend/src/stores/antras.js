@@ -15,15 +15,20 @@ import ExcelJS from 'exceljs'
  * - Staff information extraction
  * - Depot sheet merging (+D/-D → .D)
  * - Time parsing with day offsets (+1/-1)
+ * - Trains collection by date with routes and staff
  */
 export const useAntrasStore = defineStore('antras', {
   state: () => ({
-    // Core data structures from todo.txt
+    // Core data structures
     vehicles: [],           // { vehicle, vehicleNo:[], vehicleRegNo:[], vehicleWorkings:[] }
     vehicleWorkings: [],    // { vehicleWorking, startingTime, startingLocation, endingTime, endLocation }
     staff: [],              // { id, occ, name, phone, duties:[] }
     duties: [],             // { id, startingTime, endTime, trains:[] }
     stations: [],           // { code, networkPointName, arrivals:[], departures:[] }
+    
+    // Trains by date - NEW structure
+    // { '2025-12-16': [ { no, startingLocation, endLocation, staff:[], stops:[] } ] }
+    trains: {},
     
     // Raw records for debugging/display
     records: [],
@@ -63,17 +68,31 @@ export const useAntrasStore = defineStore('antras', {
       const dates = new Set()
       state.stations.forEach(station => {
         station.arrivals.forEach(arr => {
-          if (arr.arrival instanceof Date) {
-            dates.add(arr.arrival.toISOString().split('T')[0])
-          }
+          if (arr.arrivalDate) dates.add(arr.arrivalDate)
         })
         station.departures.forEach(dep => {
-          if (dep.departure instanceof Date) {
-            dates.add(dep.departure.toISOString().split('T')[0])
-          }
+          if (dep.departureDate) dates.add(dep.departureDate)
         })
       })
       return Array.from(dates).sort()
+    },
+
+    /**
+     * Get trains for a specific date
+     */
+    getTrainsByDate: (state) => (date) => {
+      return state.trains[date] || []
+    },
+
+    /**
+     * Get all unique train numbers
+     */
+    allTrainNumbers(state) {
+      const trainNos = new Set()
+      Object.values(state.trains).forEach(dayTrains => {
+        dayTrains.forEach(train => trainNos.add(train.no))
+      })
+      return Array.from(trainNos).sort((a, b) => a - b)
     },
 
     /**
@@ -87,18 +106,12 @@ export const useAntrasStore = defineStore('antras', {
         
         const arrivals = station.arrivals.filter(arr => {
           if (!state.selectedDate) return true
-          if (arr.arrival instanceof Date) {
-            return arr.arrival.toISOString().split('T')[0] === state.selectedDate
-          }
-          return false
+          return arr.arrivalDate === state.selectedDate
         })
         
         const departures = station.departures.filter(dep => {
           if (!state.selectedDate) return true
-          if (dep.departure instanceof Date) {
-            return dep.departure.toISOString().split('T')[0] === state.selectedDate
-          }
-          return false
+          return dep.departureDate === state.selectedDate
         })
         
         result.push({
@@ -139,6 +152,15 @@ export const useAntrasStore = defineStore('antras', {
     getStaffById: (state) => (id) => {
       return state.staff.find(s => s.id === id)
     },
+
+    /**
+     * Get train by number and date
+     */
+    getTrainByNoAndDate: (state) => (trainNo, date) => {
+      const dayTrains = state.trains[date]
+      if (!dayTrains) return null
+      return dayTrains.find(t => t.no === trainNo)
+    },
   },
 
   actions: {
@@ -158,34 +180,84 @@ export const useAntrasStore = defineStore('antras', {
         loggingStore.info('Laukų atvaizdavimai įkelti', {
           component: 'antrasStore',
           action: 'load_field_mappings',
-          count: Object.keys(this.fieldMappings).length
+          fieldsCount: Object.keys(response.data).length
         })
 
         return true
+
       } catch (error) {
-        loggingStore.error('Nepavyko įkelti laukų atvaizdavimų', {
+        loggingStore.error('Klaida įkeliant laukų atvaizdavimus', {
           component: 'antrasStore',
-          action: 'load_field_mappings_failed',
+          action: 'load_field_mappings_error',
           error: error.message
         })
 
+        // Use fallback mappings for development
+        this.fieldMappings = this.getDefaultMappings()
+        this.fieldMappingsLoaded = true
+
         slogStore.addToast({
-          message: 'Nepavyko įkelti laukų atvaizdavimų',
-          type: 'alert-error'
+          message: 'Naudojami numatytieji laukų atvaizdavimai',
+          type: 'alert-warning'
         })
 
-        return false
+        return true
       }
     },
 
     /**
-     * Parse vehicle name from Technical vehicle type and Vehicle no
-     * Implements all rules from todo.txt
-     * @param {string} typeStr - Technical vehicle type (comma-separated)
-     * @param {string} vehicleStr - Vehicle numbers (comma-separated)
-     * @returns {string} - Parsed vehicle name
+     * Default field mappings as fallback
      */
-    parseVehicleName(typeStr, vehicleStr) {
+    getDefaultMappings() {
+      return {
+        'Network point name': 'networkPointName',
+        'Technical vehicle type.in': 'technicalVehicleTypeIn',
+        'Technical vehicle type.out': 'technicalVehicleTypeOut',
+        'Vehicle no.in': 'vehicleNoIn',
+        'Vehicle no.out': 'vehicleNoOut',
+        'Train No.in': 'trainNoIn',
+        'Train No.out': 'trainNoOut',
+        'Arrival': 'arrival',
+        'Departure': 'departure',
+        'Duty.in': 'dutyIn',
+        'Duty.out': 'dutyOut',
+        'Driver.in': 'driverIn',
+        'Phone.in': 'phoneIn',
+        'Driver.out': 'driverOut',
+        'Phone.out': 'phoneOut',
+        'Driver.PersonnelNumber.in': 'driverPersonnelNumberIn',
+        'Driver.PersonnelNumber.out': 'driverPersonnelNumberOut',
+        'Duty.StartingTime.in': 'dutyStartingTimeIn',
+        'Duty.StartingTime.out': 'dutyStartingTimeOut',
+        'Duty.EndTime.in': 'dutyEndTimeIn',
+        'Duty.EndTime.out': 'dutyEndTimeOut',
+        'Validity.in': 'validityIn',
+        'Validity.out': 'validityOut',
+        'Starting location.in': 'startingLocationIn',
+        'Starting location.out': 'startingLocationOut',
+        'Starting time.in': 'startingTimeIn',
+        'Starting time.out': 'startingTimeOut',
+        'End location.in': 'endLocationIn',
+        'End location.out': 'endLocationOut',
+        'Ending time.in': 'endingTimeIn',
+        'Ending time.out': 'endingTimeOut',
+        'Vehicle working.in': 'vehicleWorkingIn',
+        'Vehicle working.out': 'vehicleWorkingOut',
+        'Vehicle reg. no.in': 'vehicleRegNoIn',
+        'Vehicle reg. no.out': 'vehicleRegNoOut',
+        'Train length.in': 'trainLengthIn',
+        'Train length.out': 'trainLengthOut',
+      }
+    },
+
+    /**
+     * Parse vehicle name from technical type and number
+     * Implements all rules from the specification
+     * @param {string} technicalType - e.g., "620M", "Siemens", "*730ML m"
+     * @param {string} vehicleNo - e.g., "620-010", "731-004,733-004"
+     * @returns {string} - Formatted vehicle name
+     */
+        parseVehicleName(typeStr, vehicleStr) {
       if (!typeStr || !vehicleStr) return null
 
       const types = typeStr.split(',').map(t => t.trim().replace(/^\*/, ''))
@@ -272,26 +344,23 @@ export const useAntrasStore = defineStore('antras', {
       // Default: return first vehicle
       return firstVehicle
     },
-
     /**
-     * Parse time string with day offset
-     * Handles formats like "08:48 (+1)", "23:59 (-1)"
-     * @param {string} timeStr - Time string
-     * @param {Date|string} baseDate - Base date from Validity field
-     * @returns {Date|null} - Parsed date or null
+     * Parse time string with optional day offset
+     * Handles formats like: "08:48", "23:59 (+1)", "00:24 (-1)"
+     * @param {string|Date} timeValue - Time string or Date object
+     * @param {string|Date} baseDate - Base date from Validity field
+     * @returns {Date|null} - Parsed Date object
      */
-    parseTimeWithOffset(timeStr, baseDate) {
-      if (!timeStr || !baseDate) return null
+    parseTimeWithOffset(timeValue, baseDate) {
+      if (!timeValue) return null
 
-      // Handle Date objects from Excel
-      if (timeStr instanceof Date) {
-        return timeStr
-      }
+      // If already a Date object
+      if (timeValue instanceof Date) return timeValue
 
-      const str = String(timeStr).trim()
+      const timeStr = String(timeValue).trim()
       
-      // Extract time and optional offset
-      const match = str.match(/^(\d{1,2}):(\d{2})(?:\s*\(([+-]\d+)\))?$/)
+      // Match time with optional day offset: "08:48" or "00:24 (+1)"
+      const match = timeStr.match(/^(\d{1,2}):(\d{2})(?:\s*\(([+-]\d+)\))?$/)
       if (!match) return null
 
       const hours = parseInt(match[1], 10)
@@ -302,11 +371,16 @@ export const useAntrasStore = defineStore('antras', {
       let date
       if (baseDate instanceof Date) {
         date = new Date(baseDate)
-      } else {
+      } else if (baseDate) {
         date = new Date(baseDate)
+      } else {
+        // Use today as fallback
+        date = new Date()
       }
       
-      if (isNaN(date.getTime())) return null
+      if (isNaN(date.getTime())) {
+        date = new Date()
+      }
 
       // Set time
       date.setHours(hours, minutes, 0, 0)
@@ -317,6 +391,37 @@ export const useAntrasStore = defineStore('antras', {
       }
 
       return date
+    },
+
+    /**
+     * Parse date from Validity field
+     * Handles formats like: "2025-12-16", Date objects, Excel serial numbers
+     * @param {*} value - Raw value from Excel
+     * @returns {string|null} - ISO date string (YYYY-MM-DD)
+     */
+    parseValidityDate(value) {
+      if (!value) return null
+
+      // Already a string in expected format
+      if (typeof value === 'string') {
+        const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+        if (match) return match[0]
+      }
+
+      // Date object
+      if (value instanceof Date) {
+        return value.toISOString().split('T')[0]
+      }
+
+      // Excel serial date number
+      if (typeof value === 'number') {
+        // Excel serial date: days since 1899-12-30
+        const excelEpoch = new Date(1899, 11, 30)
+        const date = new Date(excelEpoch.getTime() + value * 86400000)
+        return date.toISOString().split('T')[0]
+      }
+
+      return null
     },
 
     /**
@@ -340,8 +445,9 @@ export const useAntrasStore = defineStore('antras', {
         if (!drivers[i]) continue
 
         const duty = duties[i] || ''
-        // First letter indicates occupation: M = mašinistas, K = konduktorius
-        const occ = duty.charAt(0).toUpperCase()
+        // First letter indicates occupation: M = mašinistas, K = konduktorius, R = reservas
+        let occ = duty.charAt(0).toUpperCase()
+        occ = occ === 'R' ? duty.charAt(1).toUpperCase() : occ
 
         staffList.push({
           id: personnelNumbers[i] || null,
@@ -364,7 +470,6 @@ export const useAntrasStore = defineStore('antras', {
      * @returns {string} - Normalized name
      */
     normalizeDepotCode(sheetName) {
-      // Replace +D or -D with .D for depot sheets
       return sheetName.replace(/[+-]D$/, '.D')
     },
 
@@ -397,7 +502,7 @@ export const useAntrasStore = defineStore('antras', {
 
     /**
      * Import data from Excel file
-     * Main entry point implementing all rules from todo.txt
+     * Main entry point implementing all rules
      * @param {File} file - Excel file object
      * @returns {number} - Number of imported records
      */
@@ -448,14 +553,16 @@ export const useAntrasStore = defineStore('antras', {
         const vehicleWorkingsMap = new Map() // vehicleWorking → working data
         const staffMap = new Map()         // personnelNumber → staff data
         const dutiesMap = new Map()        // duty code → duty data
+        const trainsMap = new Map()        // date → Map(trainNo → train data)
         const processedKeys = new Set()    // For deduplication
 
         let totalRecords = 0
         let skippedSheets = 0
         let duplicatesSkipped = 0
+        let globalRowId = 0              // Global counter for unique IDs
 
         // Process each worksheet
-        workbook.eachSheet((worksheet, id) => {
+        workbook.eachSheet((worksheet, sheetId) => {
           const sheetName = worksheet.name
           
           // Skip first empty sheet
@@ -516,18 +623,16 @@ export const useAntrasStore = defineStore('antras', {
               // Handle different cell types
               if (value === null || value === undefined) {
                 value = null
+              } else if (value.result !== undefined) {
+                // Formula cell - use result
+                value = value.result
+              } else if (value.text !== undefined) {
+                // Rich text cell
+                value = value.text
               } else if (value instanceof Date) {
-                // Keep as Date object
-              } else if (typeof value === 'object') {
-                if (value.result !== undefined) {
-                  value = value.result
-                } else if (value.text !== undefined) {
-                  value = value.text
-                } else if (value.richText) {
-                  value = value.richText.map(r => r.text).join('')
-                } else {
-                  value = String(value)
-                }
+                // Keep as Date
+              } else {
+                value = String(value)
               }
               
               rawData[header] = value
@@ -539,23 +644,30 @@ export const useAntrasStore = defineStore('antras', {
               }
             })
 
-            // Generate deduplication key
-            const dedupeKey = this.generateDedupeKey(mappedData)
-            if (processedKeys.has(dedupeKey)) {
-              duplicatesSkipped++
-              continue
+            // Deduplication for depot sheets
+            if (isDepot) {
+              const dedupeKey = this.generateDedupeKey(mappedData)
+              if (processedKeys.has(dedupeKey)) {
+                duplicatesSkipped++
+                continue
+              }
+              processedKeys.add(dedupeKey)
             }
-            processedKeys.add(dedupeKey)
 
-            // Get base date from Validity field
-            const baseDateIn = mappedData.validityIn || new Date()
-            const baseDateOut = mappedData.validityOut || new Date()
+            // Increment global row ID
+            globalRowId++
 
-            // Parse arrival time
+            // Parse validity dates - THIS IS THE KEY FIX
+            const validityDateIn = this.parseValidityDate(mappedData.validityIn)
+            const validityDateOut = this.parseValidityDate(mappedData.validityOut)
+
+            // Use validity dates as base for time parsing
+            const baseDateIn = validityDateIn ? new Date(validityDateIn) : new Date()
+            const baseDateOut = validityDateOut ? new Date(validityDateOut) : new Date()
+
+            // Parse times with proper date context
             const arrivalTime = this.parseTimeWithOffset(mappedData.arrival, baseDateIn)
             const arrivalDecimal = timeToDecimal(arrivalTime)
-
-            // Parse departure time
             const departureTime = this.parseTimeWithOffset(mappedData.departure, baseDateOut)
             const departureDecimal = timeToDecimal(departureTime)
 
@@ -569,7 +681,7 @@ export const useAntrasStore = defineStore('antras', {
               mappedData.vehicleNoOut
             )
 
-            // Parse staff information
+            // Parse staff information with correct date context
             const staffIn = this.parseStaff(mappedData, 'In', baseDateIn)
             const staffOut = this.parseStaff(mappedData, 'Out', baseDateOut)
 
@@ -585,97 +697,183 @@ export const useAntrasStore = defineStore('antras', {
             
             const station = stationsMap.get(stationCode)
 
-            // Add arrival record
+            // Add arrival record with date binding
             if (mappedData.trainNoIn || vehicleIn) {
-              const arrivalId = `${stationCode}-arr-${rowNumber}-${arrivalDecimal || Date.now()}`
+              // FIXED: Unique ID using global counter
+              const arrivalId = `arr.${stationCode}---${globalRowId}`
+              
               station.arrivals.push({
                 id: arrivalId,
+                rowID: globalRowId,
                 trainNo: mappedData.trainNoIn,
-                // Compatibility fields for TracksTimeLine
-                arrivalTrainNumber: mappedData.trainNoIn,
-                arrivalPlanned: arrivalTime ? arrivalTime.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' }) : null,
-                arrivalDate: arrivalTime ? arrivalTime.toISOString().split('T')[0] : null,
-                arrivalEmployee1: staffIn.filter(s => s.occ === 'M').map(s => s.name).join(', '),
+                arrivalDate: validityDateIn,  // Date binding
                 arrival: arrivalTime,
                 arrivalDecimal,
+                arrivalPlanned: arrivalTime ? arrivalTime.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' }) : null,
                 vehicle: vehicleIn,
-                driverPersonnelNumber: staffIn.length > 0 ? staffIn[0].id : null,
-                departureTrainNo: mappedData.trainNoOut,
+                vehicleWorking: mappedData.vehicleWorkingIn,
                 staff: staffIn,
-                // Track assignment (for TracksTimeLine)
+                driverPersonnelNumber: staffIn.length > 0 ? staffIn[0].id : null,
+                departureTrainNo: mappedData.trainNoOut,  // Link to departure
                 targetTrack: null,
-                // Additional fields for display
                 startingLocation: mappedData.startingLocationIn,
                 endLocation: mappedData.endLocationIn,
-                vehicleWorking: mappedData.vehicleWorkingIn,
+                // Compatibility fields
+                arrivalTrainNumber: mappedData.trainNoIn,
+                arrivalEmployee1: staffIn.filter(s => s.occ === 'M').map(s => s.name).join(', '),
               })
             }
 
-            // Add departure record
+            // Add departure record with date binding
             if (mappedData.trainNoOut || vehicleOut) {
-              const departureId = `${stationCode}-dep-${rowNumber}-${departureDecimal || Date.now()}`
+              // FIXED: Unique ID using global counter
+              const departureId = `dep.${stationCode}---${globalRowId}`
+              
               station.departures.push({
                 id: departureId,
+                rowID: globalRowId,
                 trainNo: mappedData.trainNoOut,
-                // Compatibility fields for TracksTimeLine
-                departureTrainNumber: mappedData.trainNoOut,
-                departurePlanned: departureTime ? departureTime.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' }) : null,
-                departureDate: departureTime ? departureTime.toISOString().split('T')[0] : null,
-                departureEmployee1: staffOut.filter(s => s.occ === 'M').map(s => s.name).join(', '),
+                departureDate: validityDateOut,  // Date binding
                 departure: departureTime,
                 departureDecimal,
+                departurePlanned: departureTime ? departureTime.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' }) : null,
                 vehicle: vehicleOut,
-                driverPersonnelNumber: staffOut.length > 0 ? staffOut[0].id : null,
+                vehicleWorking: mappedData.vehicleWorkingOut,
                 staff: staffOut,
-                // Track assignment (for TracksTimeLine)
+                driverPersonnelNumber: staffOut.length > 0 ? staffOut[0].id : null,
+                arrivalTrainNo: mappedData.trainNoIn,  // Link to arrival
                 startingTrack: null,
-                // Additional fields for display
                 startingLocation: mappedData.startingLocationOut,
                 endLocation: mappedData.endLocationOut,
-                vehicleWorking: mappedData.vehicleWorkingOut,
+                // Compatibility fields
+                departureTrainNumber: mappedData.trainNoOut,
+                departureEmployee1: staffOut.filter(s => s.occ === 'M').map(s => s.name).join(', '),
               })
+            }
+
+            // Collect trains by date - NEW FEATURE
+            const collectTrain = (trainNo, date, stationCode, time, isArrival, staff, startLoc, endLoc) => {
+              if (!trainNo || !date) return
+
+              if (!trainsMap.has(date)) {
+                trainsMap.set(date, new Map())
+              }
+              
+              const dayTrains = trainsMap.get(date)
+              
+              if (!dayTrains.has(trainNo)) {
+                dayTrains.set(trainNo, {
+                  no: trainNo,
+                  startingLocation: null,
+                  endLocation: null,
+                  staff: [],
+                  stops: []
+                })
+              }
+              
+              const train = dayTrains.get(trainNo)
+              
+              // Update start/end locations
+              if (startLoc && !train.startingLocation) train.startingLocation = startLoc
+              if (endLoc) train.endLocation = endLoc
+              
+              // Add stop
+              const stopExists = train.stops.some(s => s.station === stationCode && s.code === stationCode)
+              if (!stopExists) {
+                train.stops.push({
+                  station: mappedData.networkPointName || stationCode,
+                  code: stationCode,
+                  arrival: isArrival ? time : null,
+                  departure: !isArrival ? time : null
+                })
+              } else {
+                // Update existing stop
+                const stop = train.stops.find(s => s.code === stationCode)
+                if (stop) {
+                  if (isArrival && !stop.arrival) stop.arrival = time
+                  if (!isArrival && !stop.departure) stop.departure = time
+                }
+              }
+              
+              // Add staff (avoiding duplicates)
+              staff.forEach(s => {
+                if (!s.id) return
+                const exists = train.staff.some(ts => ts.id === s.id)
+                if (!exists) {
+                  train.staff.push({
+                    id: s.id,
+                    name: s.name,
+                    phone: s.phone,
+                    duty: s.duty,
+                    dutyStartingTime: s.dutyStartingTime,
+                    dutyEndTime: s.dutyEndTime
+                  })
+                }
+              })
+            }
+
+            // Collect arrival train
+            if (mappedData.trainNoIn && validityDateIn) {
+              collectTrain(
+                mappedData.trainNoIn,
+                validityDateIn,
+                stationCode,
+                arrivalTime,
+                true,
+                staffIn,
+                mappedData.startingLocationIn,
+                mappedData.endLocationIn
+              )
+            }
+
+            // Collect departure train
+            if (mappedData.trainNoOut && validityDateOut) {
+              collectTrain(
+                mappedData.trainNoOut,
+                validityDateOut,
+                stationCode,
+                departureTime,
+                false,
+                staffOut,
+                mappedData.startingLocationOut,
+                mappedData.endLocationOut
+              )
             }
 
             // Collect vehicle information
-            const collectVehicle = (vehicleName, vehicleNo, vehicleRegNo, vehicleWorking, startLoc, startTime, endLoc, endTime, baseDate) => {
-              if (!vehicleName) return
+            const collectVehicle = (vehicle, vehicleNo, vehicleRegNo, vehicleWorking, startLoc, startTime, endLoc, endTime, baseDate) => {
+              if (!vehicle) return
               
-              if (!vehiclesMap.has(vehicleName)) {
-                vehiclesMap.set(vehicleName, {
-                  vehicle: vehicleName,
+              if (!vehiclesMap.has(vehicle)) {
+                vehiclesMap.set(vehicle, {
+                  vehicle,
                   vehicleNo: [],
                   vehicleRegNo: [],
                   vehicleWorkings: []
                 })
               }
               
-              const veh = vehiclesMap.get(vehicleName)
+              const v = vehiclesMap.get(vehicle)
               
-              // Add vehicle numbers (split and dedupe)
+              // Add numbers if not present
               if (vehicleNo) {
-                vehicleNo.split(',').forEach(no => {
-                  const trimmed = no.trim()
-                  if (trimmed && !veh.vehicleNo.includes(trimmed)) {
-                    veh.vehicleNo.push(trimmed)
-                  }
+                const nums = vehicleNo.split(',').map(n => n.trim())
+                nums.forEach(n => {
+                  if (!v.vehicleNo.includes(n)) v.vehicleNo.push(n)
                 })
               }
               
-              // Add registration numbers
               if (vehicleRegNo) {
-                vehicleRegNo.split(',').forEach(no => {
-                  const trimmed = no.trim()
-                  if (trimmed && !veh.vehicleRegNo.includes(trimmed)) {
-                    veh.vehicleRegNo.push(trimmed)
-                  }
+                const regs = vehicleRegNo.split(',').map(r => r.trim())
+                regs.forEach(r => {
+                  if (!v.vehicleRegNo.includes(r)) v.vehicleRegNo.push(r)
                 })
               }
               
-              // Add vehicle working
-              if (vehicleWorking && !veh.vehicleWorkings.includes(vehicleWorking)) {
-                veh.vehicleWorkings.push(vehicleWorking)
+              if (vehicleWorking && !v.vehicleWorkings.includes(vehicleWorking)) {
+                v.vehicleWorkings.push(vehicleWorking)
                 
-                // Also add to vehicleWorkingsMap
+                // Add to vehicle workings map
                 if (!vehicleWorkingsMap.has(vehicleWorking)) {
                   vehicleWorkingsMap.set(vehicleWorking, {
                     vehicleWorking,
@@ -697,7 +895,7 @@ export const useAntrasStore = defineStore('antras', {
               mappedData.startingTimeIn,
               mappedData.endLocationIn,
               mappedData.endingTimeIn,
-              mappedData.baseDateIn
+              baseDateIn
             )
 
             collectVehicle(
@@ -709,11 +907,11 @@ export const useAntrasStore = defineStore('antras', {
               mappedData.startingTimeOut,
               mappedData.endLocationOut,
               mappedData.endingTimeOut,
-              mappedData.baseDateOut
+              baseDateOut
             )
 
             // Collect staff information
-            const collectStaff = (staffList) => {
+            const collectStaff = (staffList, date) => {
               staffList.forEach(person => {
                 if (!person.id) return
                 
@@ -723,7 +921,8 @@ export const useAntrasStore = defineStore('antras', {
                     occ: person.occ,
                     name: person.name,
                     phone: person.phone,
-                    duties: []
+                    duties: [],
+                    dates: []  // Track dates for this staff
                   })
                 }
                 
@@ -733,14 +932,24 @@ export const useAntrasStore = defineStore('antras', {
                 if (!staff.phone && person.phone) staff.phone = person.phone
                 if (!staff.occ && person.occ) staff.occ = person.occ
                 
-                // Add duty
-                if (person.duty && !staff.duties.includes(person.duty)) {
-                  staff.duties.push(person.duty)
+                // Add duty with date binding
+                if (person.duty) {
+                  const dutyKey = `${date}:${person.duty}`
+                  if (!staff.duties.includes(dutyKey)) {
+                    staff.duties.push(dutyKey)
+                  }
                   
-                  // Also add to dutiesMap
-                  if (!dutiesMap.has(person.duty)) {
-                    dutiesMap.set(person.duty, {
+                  // Track dates
+                  if (date && !staff.dates.includes(date)) {
+                    staff.dates.push(date)
+                  }
+                  
+                  // Also add to dutiesMap with date
+                  const dutyMapKey = `${date}:${person.duty}`
+                  if (!dutiesMap.has(dutyMapKey)) {
+                    dutiesMap.set(dutyMapKey, {
                       id: person.duty,
+                      date: date,
                       startingTime: person.dutyStartingTime,
                       endTime: person.dutyEndTime,
                       trains: []
@@ -748,7 +957,7 @@ export const useAntrasStore = defineStore('antras', {
                   }
                   
                   // Add train to duty
-                  const duty = dutiesMap.get(person.duty)
+                  const duty = dutiesMap.get(dutyMapKey)
                   const trainNo = mappedData.trainNoIn || mappedData.trainNoOut
                   if (trainNo && !duty.trains.includes(trainNo)) {
                     duty.trains.push(trainNo)
@@ -757,20 +966,24 @@ export const useAntrasStore = defineStore('antras', {
               })
             }
 
-            collectStaff(staffIn)
-            collectStaff(staffOut)
+            collectStaff(staffIn, validityDateIn)
+            collectStaff(staffOut, validityDateOut)
 
-            // Store raw record for display
+            // Store raw record for display - FIXED ID
             this.records.push({
-              id: `${stationCode}-${rowNumber}`,
+              id: `rec-${globalRowId}`,
               sheetName: stationCode,
+              originalSheet: sheetName,
+              rowNumber,
               ...mappedData,
               vehicleIn,
               vehicleOut,
               arrivalTime,
               arrivalDecimal,
+              arrivalDate: validityDateIn,
               departureTime,
               departureDecimal,
+              departureDate: validityDateOut,
             })
 
             totalRecords++
@@ -788,6 +1001,13 @@ export const useAntrasStore = defineStore('antras', {
         this.vehicleWorkings = Array.from(vehicleWorkingsMap.values())
         this.staff = Array.from(staffMap.values())
         this.duties = Array.from(dutiesMap.values())
+        
+        // Convert trains map to object structure
+        this.trains = {}
+        trainsMap.forEach((dayTrains, date) => {
+          this.trains[date] = Array.from(dayTrains.values())
+            .sort((a, b) => a.no - b.no)
+        })
 
         this.fileName = file.name
         this.lastImported = new Date().toISOString()
@@ -799,6 +1019,7 @@ export const useAntrasStore = defineStore('antras', {
           stationsCount: this.stations.length,
           vehiclesCount: this.vehicles.length,
           staffCount: this.staff.length,
+          trainsCount: Object.values(this.trains).flat().length,
           recordsCount: totalRecords,
           skippedSheets,
           duplicatesSkipped
@@ -871,6 +1092,7 @@ export const useAntrasStore = defineStore('antras', {
       this.vehicleWorkings = []
       this.staff = []
       this.duties = []
+      this.trains = {}
       this.selectedSheet = null
       this.selectedDate = null
       this.lastImported = null
@@ -890,7 +1112,8 @@ export const useAntrasStore = defineStore('antras', {
         vehicles: this.vehicles,
         vehicleWorkings: this.vehicleWorkings,
         staff: this.staff,
-        duties: this.duties
+        duties: this.duties,
+        trains: this.trains
       }
 
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
@@ -944,6 +1167,7 @@ export const useAntrasStore = defineStore('antras', {
     getStatistics() {
       const totalArrivals = this.stations.reduce((sum, s) => sum + s.arrivals.length, 0)
       const totalDepartures = this.stations.reduce((sum, s) => sum + s.departures.length, 0)
+      const totalTrains = Object.values(this.trains).flat().length
       
       return {
         stations: this.stations.length,
@@ -953,7 +1177,9 @@ export const useAntrasStore = defineStore('antras', {
         duties: this.duties.length,
         arrivals: totalArrivals,
         departures: totalDepartures,
-        records: this.records.length
+        records: this.records.length,
+        trains: totalTrains,
+        dates: this.availableDates.length
       }
     }
   }

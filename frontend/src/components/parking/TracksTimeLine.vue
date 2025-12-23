@@ -108,6 +108,7 @@ const trackAssignments = computed(() => {
     }
     if (arrival.targetTrack) {
       const track = arrival.targetTrack.split('.')
+      if (track.length < 2) return
       const trackNum = parseInt(track[0]) || 0
       const positionNum = parseInt(track[1]) || 1
       
@@ -145,6 +146,7 @@ const trackAssignments = computed(() => {
       
       if (!existingAssignment) {
         const track = departure.startingTrack.split('.')
+        if (track.length < 2) return
         const trackNum = parseInt(track[0]) || 0
         const positionNum = parseInt(track[1]) || 1
         
@@ -265,7 +267,7 @@ const drawTimeline = () => {
   drawTrackRules()
   
   // Draw legend
-  drawLegend()
+  // drawLegend()
   
   // Draw tooltip if hovering over an item
   drawTooltip()
@@ -524,13 +526,13 @@ const drawAssignments = () => {
     }
     
     // Draw connection lines to markers if available
-    if (assignment.arrivalInfo && assignment.arrivalInfo.arrivalDecimal >= timelineStartMinutes.value) {
-      drawConnectorLine(lineX, startY, 100, startY, 'arrival')
-    }
+    // if (assignment.arrivalInfo && assignment.arrivalInfo.arrivalDecimal >= timelineStartMinutes.value) {
+    //   drawConnectorLine(lineX, startY, 100, startY, 'arrival')
+    // 
     
-    if (assignment.departureInfo && assignment.departureInfo.departureDecimal <= timelineEndMinutes.value) {
-      drawConnectorLine(lineX, endY, width.value - 100, endY, 'departure')
-    }
+    // if (assignment.departureInfo && assignment.departureInfo.departureDecimal <= timelineEndMinutes.value) {
+    //   drawConnectorLine(lineX, endY, width.value - 100, endY, 'departure')
+    // }
     
     // Draw conflict indicators if any
     if (assignment.conflicts && assignment.conflicts.length > 0) {
@@ -668,6 +670,7 @@ const drawMarkers = () => {
   
   // Отрисовываем маркеры
   props.arrivals.forEach(arrival => {
+    if (arrival.targetTrack || !arrival.vehicle) return
     if (arrival.arrivalDecimal < timelineStartMinutes.value || 
         arrival.arrivalDecimal > timelineEndMinutes.value) return
     
@@ -683,6 +686,7 @@ const drawMarkers = () => {
   
   // Draw departure markers
   props.departures.forEach(departure => {
+    if (departure.startingTrack || !departure.vehicle)return
     if (departure.departureDecimal < timelineStartMinutes.value || 
         departure.departureDecimal > timelineEndMinutes.value) return
     
