@@ -1008,6 +1008,7 @@ const getItemAtCoords = (x, y) => {
     // Check arrival markers
     for (let i = props.arrivals.length - 1; i >= 0; i--) {
       const arrival = props.arrivals[i]
+      if (arrival.targetTrack || !arrival.vehicle) continue
       if (arrival.arrivalDecimal < timelineStartMinutes.value || 
           arrival.arrivalDecimal > timelineEndMinutes.value) continue
       
@@ -1025,6 +1026,7 @@ const getItemAtCoords = (x, y) => {
     // Check departure markers
     for (let i = props.departures.length - 1; i >= 0; i--) {
       const departure = props.departures[i]
+      if (departure.startingTrack || !departure.vehicle) continue
       if (departure.departureDecimal < timelineStartMinutes.value || 
           departure.departureDecimal > timelineEndMinutes.value) continue
       
